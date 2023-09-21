@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta
 import jwt
 from api import api
+import hashlib
 
 accounts = [
     {
@@ -16,6 +17,14 @@ accounts = [
 
 # This needs to be replaced with a db query which returns the account type or None
 def check_account(username, password):
+
+    # Commented until database is implemented
+    """
+    expected_encrypted_password = None
+    password_correct = check_encrypted_password(password, expected_encrypted_password)
+    if not password_correct:
+        return None
+    """
     for account in accounts:
         if account["username"] == username:
             if account["password"] == password:
@@ -78,3 +87,17 @@ def refresh_auth_token(user_refresh_token):
 
 def get_account_from_token(token_result):
     return token_result["username"], token_result["account_type"]
+
+
+def set_encrypted_password(password):
+    # Use sha256 to encrypt password
+    # Salt could be stored in db or config file
+    salt = "XZDJDcwevwgvjkerWDWD3243FEDVEf"
+    password += salt
+    return hashlib.sha256(password.encode()).hexdigest()
+
+
+def check_encrypted_password(password, expected_encrypted_password):
+    salt = "XZDJDcwevwgvjkerWDWD3243FEDVEf"
+    password += salt
+    return hashlib.sha256(password.encode()).hexdigest() == expected_encrypted_password
