@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta
 import jwt
-
+from api import api
 
 accounts = [
     {
@@ -14,22 +14,22 @@ accounts = [
 ]
 
 
+# This needs to be replaced with a db query which returns the account type or None
 def check_account(username, password):
     for account in accounts:
         if account["username"] == username:
             if account["password"] == password:
-                return True
-    return False
+                # Change this!!!
+                return "Admin"
+    return None
 
 
 # Write a function using flask-jwt that takes the username and account_type as arguments and returns a JWT token.
 def get_auth_token(username, account_type):
-    # Secret key to be replaced with app.config["SECRET_KEY"]
-    # Uses HS256 to encrypt data into the token
     # Change time delta to 20 mins when finished testing
     auth_token = jwt.encode({"username": username, "account_type": account_type,
                              "exp": datetime.utcnow() + timedelta(hours=24)},
-                            "SECRET_KEY", "HS256")
+                            api.config["SECRET_KEY"], "HS256")
 
     return auth_token
 
@@ -40,7 +40,7 @@ def check_token(auth_token):
     if not auth_token:
         return None
     try:
-        decoded = jwt.decode(auth_token, "SECRET_KEY", algorithms=["HS256"])
+        decoded = jwt.decode(auth_token, api.config["SECRET_KEY"], algorithms=["HS256"])
         if "username" not in decoded or "account_type" not in decoded:
             return None
         return decoded
@@ -54,7 +54,7 @@ def check_token(auth_token):
 def get_refresh_token(username, account_type):
     refresh_token = jwt.encode({"username": username, "account_type": account_type,
                                 "exp": datetime.utcnow() + timedelta(days=3)},
-                               "SECRET_REFRESH_KEY", "HS256")
+                               api.config["SECRET_REFRESH_KEY"], "HS256")
     return refresh_token
 
 
@@ -63,8 +63,10 @@ def refresh_auth_token(user_refresh_token):
     # Implemented as user may not provide a token.
     if not user_refresh_token:
         return None
+
     try:
-        decoded = jwt.decode(user_refresh_token, "SECRET_REFRESH_KEY", algorithms=["HS256"])
+        decoded = jwt.decode(user_refresh_token, api.config["SECRET_REFRESH_KEY"], algorithms=["HS256"])
+        print(decoded)
         if "username" not in decoded or "account_type" not in decoded:
             return None
         return get_auth_token(decoded["username"], decoded["account_type"])

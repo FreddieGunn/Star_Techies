@@ -6,4 +6,4 @@ api.config.from_object(Config)
 
 # Need to add db connections
 
-from api import routes, errors
+from api import routes, errors, auth, decorators

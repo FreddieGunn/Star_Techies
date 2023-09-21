@@ -1,7 +1,7 @@
 from flask import jsonify, request, abort
 from api import api
-from api.auth import check_account, get_auth_token, get_refresh_token, refresh_auth_token, check_token,\
-    get_account_from_token
+from api.auth import check_account, get_auth_token, get_refresh_token, refresh_auth_token
+from api.decorators import admin_required, springboard_required, auth_required
 
 users = [
     {
@@ -17,13 +17,10 @@ users = [
 ]
 
 
+# May need to change the auth_required decorator to remove Residents accessing other residents' data.
 @api.route("/api/residents", methods=["GET"])
-def get_residents():
-    auth_token = request.headers.get("Authorization")
-    token_result = check_token(auth_token)
-    if not token_result:
-        abort(401)
-    account_type, account_id = get_account_from_token(token_result)
+@auth_required
+def get_residents(username, account_type):
 
     # Retrieve all residents here
     # Mock data for now
@@ -31,12 +28,8 @@ def get_residents():
 
 
 @api.route("/api/residents/<resident_id>", methods=["GET"])
-def get_resident(resident_id):
-    auth_token = request.headers.get("Authorization")
-    token_result = check_token(auth_token)
-    if not token_result:
-        abort(401)
-    account_type, account_id = get_account_from_token(token_result)
+@auth_required
+def get_resident(resident_id, username, account_type):
 
     # Retrieve the user here
     # Need to add filtering and check account type
@@ -49,14 +42,8 @@ def get_resident(resident_id):
 
 
 @api.route("/api/residents/<resident_id>", methods=["DELETE"])
-def delete_resident(resident_id):
-    auth_token = request.headers.get("Authorization")
-    token_result = check_token(auth_token)
-    if not token_result or token_result['account_type'] != 'Admin':
-        abort(401)
-
-    account_type, account_id = get_account_from_token(token_result)
-
+@admin_required
+def delete_resident(resident_id, username, account_type):
     # Check the user exists
     # Replace with actual check function
     if int(resident_id) != 1 and int(resident_id) != 2:
@@ -68,12 +55,8 @@ def delete_resident(resident_id):
 
 
 @api.route("/api/residents", methods=["POST"])
-def create_resident():
-    auth_token = request.headers.get("Authorization")
-    token_result = check_token(auth_token)
-    if not token_result:
-        abort(401)
-    account_type, account_id = get_account_from_token(token_result)
+@springboard_required
+def create_resident(username, account_type):
     # Get the post data
     payload = request.json
     # Grab user details from the payload and write to db
@@ -89,12 +72,11 @@ def login():
     if not username or not password:
         abort(400)
 
-    valid_account = check_account(username, password)
-    if not valid_account:
+    account_type = check_account(username, password)
+    if not account_type:
         abort(401)
 
-    # X needs to be replaced with the account type
-    account_type = "Admin"
+    # X needs to be replaced with the account type. This will come from the db.
     auth_token = get_auth_token(username, account_type)
     refresh_token = get_refresh_token(username, account_type)
 
