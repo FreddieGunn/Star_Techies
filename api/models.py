@@ -1,5 +1,7 @@
 from api import dynamodb_client
 from api.auth import check_encrypted_password, set_encrypted_password
+import uuid
+import boto3
 
 
 class AccountManager:
@@ -82,5 +84,91 @@ class AccountManager:
                 return None
 
             return True
+        except KeyError:
+            return None
+
+
+class OrganizationManager:
+    def __init__(self):
+        self.dynamo_db = dynamodb_client
+        self.table_name = "organizations"
+        self.key_name = "organization_id"
+        self.key_type = "S"
+
+    def get_all_organizations(self):
+        try:
+            response = self.dynamo_db.scan(TableName=self.table_name)
+            print(response)
+            if "Items" not in response or len(response['Items']) == 0:
+                return None
+            items = response['Items']
+
+            # Used if more results still to return (Unlikely for this table)+
+            while "LastEvaluatedKey" in response:
+                response = self.dynamo_db.scan(TableName=self.table_name,
+                                               ExclusiveStartKey=response['LastEvaluatedKey'])
+
+                items.extend(response['Items'])
+
+            return items
+        except KeyError:
+            return None
+
+    def create_organization(self, data):
+        try:
+            data["organization_id"] = str(uuid.uuid4())
+            organization = {}
+            for key, value in data.items():
+                organization[key] = {self.key_type: str(value)}
+            response = self.dynamo_db.put_item(TableName=self.table_name, Item=organization)
+            if response['ResponseMetadata']['HTTPStatusCode'] != 200:
+                return None
+            return data["organization_id"]
+        except KeyError:
+            return None
+
+    def get_organization(self, organization_id):
+        try:
+            response = self.dynamo_db.scan(TableName=self.table_name,
+                                           key={self.key_name: {self.key_type: organization_id}})
+            if "Item" not in response or len(response['Item']) == 0:
+                return None
+            return response['Item']
+        except KeyError:
+            return None
+
+
+class MessageManager:
+    def __init__(self):
+        self.dynamo_db = dynamodb_client
+        self.table_name = "messages"
+        self.key_name = "message_id"
+        self.key_type = "S"
+
+    def create_message(self, message):
+        try:
+            message["message_id"] = message["user_id"] + "_" + message["gen_goal_id"] + "_" + str(uuid.uuid4())
+            new_message = {}
+            for key, value in message.items():
+                new_message[key] = {self.key_type: str(value)}
+            print("Running")
+            response = self.dynamo_db.put_item(TableName=self.table_name, Item=new_message)
+            print(response)
+            if response['ResponseMetadata']['HTTPStatusCode'] != 200:
+                return None
+            return message["message_id"]
+
+        except KeyError:
+            return None
+
+    def get_messages(self, user_id, gen_goal_id):
+        try:
+            response = self.dynamo_db.scan(TableName=self.table_name,
+                                           FilterExpression="user_id = :user_id AND gen_goal_id = :gen_goal_id",
+                                           ExpressionAttributeValues={":user_id": {self.key_type: user_id},
+                                                                      ":gen_goal_id": {self.key_type: gen_goal_id}})
+            if "Items" not in response or len(response['Items']) == 0:
+                return None
+            return response['Items']
         except KeyError:
             return None
