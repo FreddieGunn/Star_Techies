@@ -69,3 +69,18 @@ class AccountManager:
             return True
         except KeyError:
             return None
+
+    def update_account_password_db(self, account_id, password):
+        try:
+            password = set_encrypted_password(password)
+            response = self.dynamo_db.update_item(TableName=self.table_name,
+                                                  Key={self.key_name: {self.key_type: account_id}},
+                                                  UpdateExpression="SET password = :password",
+                                                  ExpressionAttributeValues={":password": {self.key_type: password}})
+
+            if response['ResponseMetadata']['HTTPStatusCode'] != 200:
+                return None
+
+            return True
+        except KeyError:
+            return None

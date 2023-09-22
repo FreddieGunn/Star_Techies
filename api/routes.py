@@ -154,3 +154,30 @@ def create_account(username, account_type):
 def get_buck():
     get_bucket()
     return jsonify({"msg": "Bucket retrieved"}), 200
+
+
+# Change password route
+@api.route("/api/change_password/<account_id>", methods=["POST"])
+@auth_required
+def change_password(account_id, username, account_type):
+    data = request.get_json()
+    password = data.get("password")
+    if not password:
+        return jsonify({"msg": "Missing password"}), 400
+
+    # Only admin can change others passwords
+    if account_id != username and account_type != "Admin":
+        return jsonify({"msg": "Only Admin can change other users' passwords"}), 400
+
+    # Check the username exists in db
+    if not account_manager.get_account_db(account_id):
+        return jsonify({"msg": "Username does not exist"}), 400
+
+    # Check the password is valid
+    if len(password) < 8:
+        return jsonify({"msg": "Password must be at least 8 characters"}), 400
+
+    # Update the password
+    if not account_manager.update_account_password_db(account_id, password):
+        abort(400)
+    return jsonify({"msg": "Password updated"}), 200
