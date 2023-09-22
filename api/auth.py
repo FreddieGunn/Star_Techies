@@ -3,37 +3,8 @@ import jwt
 from api import api
 import hashlib
 
-accounts = [
-    {
-        "username": "TESTUSER",
-        "password": "SHA256"
-    },
-    {
-        "username": "TESTUSER2",
-        "password": "SHA2567"
-    }
-]
 
-
-# This needs to be replaced with a db query which returns the account type or None
-def check_account(username, password):
-
-    # Commented until database is implemented
-    """
-    expected_encrypted_password = None
-    password_correct = check_encrypted_password(password, expected_encrypted_password)
-    if not password_correct:
-        return None
-    """
-    for account in accounts:
-        if account["username"] == username:
-            if account["password"] == password:
-                # Change this!!!
-                return "Admin"
-    return None
-
-
-# Write a function using flask-jwt that takes the username and account_type as arguments and returns a JWT token.
+# Function using flask-jwt that takes the username and account_type as arguments and returns a JWT token.
 def get_auth_token(username, account_type):
     # Change time delta to 20 mins when finished testing
     auth_token = jwt.encode({"username": username, "account_type": account_type,
@@ -72,10 +43,8 @@ def refresh_auth_token(user_refresh_token):
     # Implemented as user may not provide a token.
     if not user_refresh_token:
         return None
-
     try:
         decoded = jwt.decode(user_refresh_token, api.config["SECRET_REFRESH_KEY"], algorithms=["HS256"])
-        print(decoded)
         if "username" not in decoded or "account_type" not in decoded:
             return None
         return get_auth_token(decoded["username"], decoded["account_type"])

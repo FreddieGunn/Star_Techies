@@ -1,7 +1,9 @@
 from flask import jsonify, request, abort
 from api import api
-from api.auth import check_account, get_auth_token, get_refresh_token, refresh_auth_token, set_encrypted_password
+from api.auth import get_auth_token, get_refresh_token, refresh_auth_token
 from api.decorators import admin_required, springboard_required, auth_required
+from api.bucket import get_bucket
+from api.models import AccountManager
 
 users = [
     {
@@ -15,6 +17,9 @@ users = [
         "Age": 19
     }
 ]
+
+# Initialise the account manager
+account_manager = AccountManager()
 
 
 # May need to change the auth_required decorator to remove Residents accessing other residents' data.
@@ -70,11 +75,10 @@ def login():
     if not username or not password:
         abort(400)
 
-    account_type = check_account(username, password)
+    account_type = account_manager.check_account_db(username, password)
     if not account_type:
         abort(401)
 
-    # X needs to be replaced with the account type. This will come from the db.
     auth_token = get_auth_token(username, account_type)
     refresh_token = get_refresh_token(username, account_type)
 
@@ -95,21 +99,19 @@ def refresh():
     return jsonify({"auth_token": auth_token}), 201
 
 
-@api.route("/api/accounts", methods=["DELETE"])
+@api.route("/api/accounts/<account_id>", methods=["DELETE"])
 @admin_required
-def delete_account(username, account_type):
-    data = request.get_json()
-    account_to_delete = data.get("username")
-    if not account_to_delete:
-        abort(400)
+def delete_account(account_id, username, account_type):
+    if account_id == username:
+        return jsonify({"msg": "Cannot delete your own account"}), 400
 
-    # Check the user exists in db
-    account_exists = False
-    if not account_exists:
+    # Check the account exists
+    if not account_manager.get_account_db(account_id):
         abort(404)
 
-    # Delete the user from the db here
-
+    # Delete the account
+    if not account_manager.delete_account_db(account_id):
+        abort(400)
     return jsonify({"msg": "Account deleted"}), 200
 
 
@@ -117,15 +119,38 @@ def delete_account(username, account_type):
 @springboard_required
 def create_account(username, account_type):
     data = request.get_json()
-    account_to_create = data.get("username")
-    if not account_to_create:
-        abort(400)
+    mandatory_fields = ["username", "password", "account_type", "name", "surname"]
+
+    # Check all mandatory fields are present
+    for mandatory_field in mandatory_fields:
+        if mandatory_field not in data:
+            return jsonify({"msg": f"Missing mandatory field {mandatory_field}"}), 400
 
     # Check the username doesn't already exist in db
+    if account_manager.get_account_db(data["username"]):
+        return jsonify({"msg": "Username already exists"}), 400
+
+    # Check the account type is valid
+    if data["account_type"] not in ["Admin", "Springboard", "Resident", "External"]:
+        return jsonify({"msg": "Invalid account type"}), 400
+
+    # Only Admin can create Admin accounts
+    if data["account_type"] == "Admin" and account_type != "Admin":
+        return jsonify({"msg": "Only Admin can create Admin accounts"}), 400
+
+    # Check the password is valid
+    if len(data["password"]) < 8:
+        return jsonify({"msg": "Password must be at least 8 characters"}), 400
 
     # Get all values from data and write to db
+    if not account_manager.create_account_db(data):
+        abort(400)
 
-    password = data.get("password")
-    encrypted_password = set_encrypted_password(password)
-    print(encrypted_password)
-    return jsonify({"msg": "Account created"}), 201
+    return jsonify({"msg": "Account created", "username": data["account_id"]}), 201
+
+
+# Test route to check bucket retrieval
+@api.route("/api/get_bucket", methods=["GET"])
+def get_buck():
+    get_bucket()
+    return jsonify({"msg": "Bucket retrieved"}), 200
