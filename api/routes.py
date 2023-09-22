@@ -3,7 +3,8 @@ from api import api
 from api.auth import get_auth_token, get_refresh_token, refresh_auth_token
 from api.decorators import admin_required, springboard_required, auth_required
 from api.bucket import get_bucket
-from api.models import AccountManager
+from api.models import AccountManager, OrganizationManager, MessageManager
+from datetime import datetime
 
 users = [
     {
@@ -20,7 +21,8 @@ users = [
 
 # Initialise the account manager
 account_manager = AccountManager()
-
+organization_manager = OrganizationManager()
+message_manager = MessageManager()
 
 # May need to change the auth_required decorator to remove Residents accessing other residents' data.
 @api.route("/api/residents", methods=["GET"])
@@ -138,6 +140,9 @@ def create_account(username, account_type):
     if data["account_type"] == "Admin" and account_type != "Admin":
         return jsonify({"msg": "Only Admin can create Admin accounts"}), 400
 
+    if data["account_type"] == "Resident" and "resident_id" not in data:
+        return jsonify({"msg": "Missing resident_id for Resident account"}), 400
+
     # Check the password is valid
     if len(data["password"]) < 8:
         return jsonify({"msg": "Password must be at least 8 characters"}), 400
@@ -147,6 +152,25 @@ def create_account(username, account_type):
         abort(400)
 
     return jsonify({"msg": "Account created", "username": data["account_id"]}), 201
+
+
+@api.route("/api/get_account/<account_id>", methods=["GET"])
+@auth_required
+def get_account(account_id, username, account_type):
+    # Only Admin or Springboard can get other accounts
+    if account_id != username and account_type not in ("Admin", "Springboard"):
+        return jsonify({"msg": "Only Springboard staff can get other accounts"}), 400
+
+    # Check the account exists
+    if not account_manager.get_account_db(account_id):
+        abort(404)
+
+    # Get the account
+    account = account_manager.get_account_db(account_id)
+    if not account:
+        abort(400)
+    account.pop("password")
+    return jsonify({"msg": "Account retrieved", "account": account}), 200
 
 
 # Test route to check bucket retrieval
@@ -181,3 +205,51 @@ def change_password(account_id, username, account_type):
     if not account_manager.update_account_password_db(account_id, password):
         abort(400)
     return jsonify({"msg": "Password updated"}), 200
+
+
+@api.route("/api/organizations", methods=["GET"])
+def get_organizations():
+    all_organizations = organization_manager.get_all_organizations()
+    if not all_organizations:
+        abort(400)
+
+    return jsonify({"msg": "Organizations retrieved", "organizations": all_organizations}), 200
+
+
+@api.route("/api/organizations", methods=["POST"])
+@springboard_required
+def create_organization(username, account_type):
+    data = request.get_json()
+    mandatory_fields = ["name", "services_summary"]
+    for mandatory_field in mandatory_fields:
+        if mandatory_field not in data:
+            return jsonify({"msg": f"Missing mandatory field {mandatory_field}"}), 400
+    organization_id = organization_manager.create_organization(data)
+    if not organization_id:
+        abort(400)
+
+    return jsonify({"msg": "Organization created", "organization_id": organization_id}), 201
+
+
+# Route for creating message
+@api.route("/api/messages", methods=["POST"])
+@auth_required
+def create_message(username, account_type):
+    message = request.get_json()
+    mandatory_fields = ["user_id", "gen_goal_id", "msg", "author", "title"]
+    for mandatory_field in mandatory_fields:
+        if mandatory_field not in message:
+            return jsonify({"msg": f"Missing mandatory field {mandatory_field}"}), 400
+    print("running")
+    message["timestamp"] = datetime.utcnow().isoformat()
+    message_manager.create_message(message)
+    return jsonify({"msg": "Message created"}), 200
+
+# Get all messages for specific
+@api.route("/api/messages/<user_id>/<gen_goal_id>", methods=["GET"])
+@auth_required
+def get_all_user_goal_messages(user_id, gen_goal_id, username, account_type):
+    messages = message_manager.get_messages(user_id, gen_goal_id)
+    if not messages:
+        abort(400)
+    return jsonify({"msg": "Messages retrieved", "messages": messages}), 200
